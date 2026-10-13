@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>射龍門</title>
+<style>
+:root{--bg:#0f3b2e;--panel:#164a3a;--ink:#f4f1e6;--gold:#f2c14e;--red:#d62839;--mut:#9cc3b4;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,"Noto Sans TC",sans-serif;min-height:100vh}
+.wrap{max-width:760px;margin:0 auto;padding:12px}
+h1{text-align:center;color:var(--gold);font-size:42px;margin:24px 0 8px}
+.box{background:var(--panel);border-radius:12px;padding:14px;margin:10px 0}
+button{font:inherit;border:0;border-radius:8px;padding:10px 14px;background:var(--gold);color:#222;font-weight:700;cursor:pointer}
+button.sec{background:#2d6a57;color:var(--ink)}button:disabled{opacity:.4;cursor:not-allowed}
+.hide{display:none!important}
+#players{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:6px}
+.pl{background:var(--panel);border:2px solid transparent;border-radius:8px;padding:6px 8px;font-size:14px}
+.pl b{display:block}.pl.cur{border-color:var(--gold);box-shadow:0 0 10px var(--gold)}.pl.out{opacity:.4;text-decoration:line-through}
+.pl.me b{color:var(--gold)}
+#pot{text-align:center;font-size:20px;margin:10px 0}#pot span{color:var(--gold);font-weight:700;font-size:26px}
+#cards{display:flex;justify-content:center;align-items:center;gap:26px;margin:10px 0}
+.card{width:76px;height:108px;border-radius:8px;background:#fff;color:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:30px;font-weight:700;border:2px solid #ccc}
+.card.red{color:var(--red)}.card small{font-size:26px}
+.card.back{background:repeating-linear-gradient(45deg,#8b1e3f,#8b1e3f 6px,#6d1730 6px,#6d1730 12px);border-color:#fff;color:transparent}
+.card.empty{background:transparent;border:2px dashed var(--mut);color:var(--mut);font-size:14px}
+.flip{animation:fl .4s}@keyframes fl{from{transform:rotateY(90deg)}to{transform:none}}
+#msg{min-height:64px;text-align:center;font-size:17px;line-height:1.5}
+#msg .win{color:#7dff9b}#msg .lose{color:#ff8a8a}
+#panel .row{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;margin:6px 0}
+#betv{font-size:26px;color:var(--gold);min-width:90px;text-align:center}
+input[type=range]{width:100%}
+.g.sel{outline:3px solid #fff}
+#end{position:fixed;inset:0;background:#000b;display:flex;align-items:center;justify-content:center;padding:20px;z-index:9}
+#end .box{text-align:center;max-width:380px;width:100%}
+select{font:inherit;padding:8px;border-radius:8px}
+#bar{position:fixed;left:0;right:0;bottom:0;display:flex;gap:10px;justify-content:center;padding:10px 10px calc(10px + env(safe-area-inset-bottom,0px));background:#0b2c22;z-index:5}.wrap{padding-bottom:84px}#panel button{padding:8px 11px}
+</style><script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script></head><body><div class="wrap">
+<div id="home">
+  <h1>射龍門</h1>
+  <div class="box" style="text-align:center">你的名字：<input id="pname" maxlength="8" placeholder="玩家" size="10" style="font:inherit;padding:8px;border-radius:8px"></div>
+  <div class="box" style="text-align:center">
+    <b>單機</b>　總人數(1 真人 + NPC)：<select id="n"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select>
+    <p><button id="start">開始遊戲</button></p>
+  </div>
+  <div class="box" style="text-align:center"><b>連線</b>　房間總人數：<select id="rn"></select> <button id="create">建立房間</button>
+    <p>房間代碼：<input id="code" maxlength="4" size="6" style="font:inherit;padding:8px;border-radius:8px;text-transform:uppercase"> <button class="sec" id="join">加入房間</button></p></div>
+  <div class="box" style="font-size:14px;line-height:1.7">
+    <b>規則</b><br>
+    • 虛擬籌碼，無現金價值。每人 1,000 起始，開局各繳 10 元底注。<br>
+    • 每手翻兩張門柱（A=1…K=13）。可下注(10 的倍數，最低 10)或跳過。<br>
+    • 第三張嚴格介於門柱之間：贏 1 倍；範圍外：輸 1 倍；撞柱：輸 2 倍。<br>
+    • 門柱相鄰：自動跳過。門柱相同(對子)：猜大/小，對輸贏 1 倍，三條輸 3 倍。<br>
+    • 贏錢由底池支付，輸的進底池。贏的獎金不會超過底池，底池永遠不會是負數；底池歸 0 時所有有效玩家各繳 10；繳不出者淘汰。<br>
+    • 最高下注 = min(⌊底池÷M⌋, ⌊籌碼÷L⌋) 取 10 的倍數(一般 L=2，對子 L=3，M=1)。<br>
+    • 只剩一人或你被淘汰時遊戲結束。
+  </div>
+</div>
+
+<div id="lobby" class="hide"><h1>連線房間</h1><div class="box" style="text-align:center"><div>房間代碼（告訴朋友）</div><div id="lcode" style="font-size:38px;color:var(--gold);letter-spacing:6px"></div><div id="lplayers" style="margin:10px 0;line-height:1.8"></div><p><button id="lstart">開始遊戲</button> <button class="sec" id="lleave">離開</button></p></div></div>
+<div id="game" class="hide">
+  <div id="players"></div>
+  <div id="pot">底池 <span id="potv">0</span></div>
+  <div id="cards"></div>
+  <div id="msg"></div>
+  <div id="panel" class="box hide">
+    <div class="row" id="gr"><button class="sec g" data-g="big">猜大</button><button class="sec g" data-g="small">猜小</button></div>
+    <div class="row"><div id="betv">10</div></div><div class="row"><button class="sec d" data-d="-100">−100</button><button class="sec d" data-d="-50">−50</button><button class="sec d" data-d="-10">−10</button><button class="sec d" data-d="10">+10</button><button class="sec d" data-d="50">+50</button><button class="sec d" data-d="100">+100</button></div>
+    <input type="range" id="sl" min="10" step="10">
+    <div class="row">最高下注：<b id="mx"></b> <button class="sec" id="qhalf">一半</button> <button class="sec" id="qmax">最大</button></div>
+    <div class="row"><button id="ok">確認下注</button><button class="sec" id="skip">跳過</button></div>
+  </div>
+  <div id="bar"><button class="sec" id="rs">重新開始</button><button class="sec" id="hm">返回首頁</button></div>
+</div>
+<div id="end" class="hide"><div class="box"><h2 id="et"></h2><p id="eb"></p><button id="er">重新開始</button> <button class="sec" id="eh">返回首頁</button></div></div>
+</div>
+<script>
+/* ============ Game Engine（純規則，不碰 DOM；未來可由房主執行） ============ */
+const E={
+  newDeck(){const d=[];for(let s=0;s<4;s++)for(let r=1;r<=13;r++)d.push({r,s});
+    for(let i=d.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[d[i],d[j]]=[d[j],d[i]]}return d},
+  newGame(list){const n=list.length,players=list.map((x,i)=>({id:i,name:x.name,human:x.human,chips:1000,alive:true}));
+    const S={players,pot:0,deck:E.newDeck(),cur:0,hand:null,over:false,result:null,total:1000*n};
+    players.forEach(p=>{p.chips-=10;S.pot+=10});S.cur=Math.floor(Math.random()*n);return S},
+  alive:S=>S.players.filter(p=>p.alive),
+  startHand(S){let re=false;if(S.deck.length<3){S.deck=E.newDeck();re=true}
+    const a=S.deck.pop(),b=S.deck.pop(),lo=Math.min(a.r,b.r),hi=Math.max(a.r,b.r);
+    const type=lo===hi?'pair':(hi-lo===1?'adjacent':'normal');
+    return S.hand={a,b,lo,hi,type,third:null,action:null,net:0,outcome:null,reshuffled:re}},
+  maxBet(S,type,chips){if(type==='adjacent')return 0;const L=type==='pair'?3:2,M=1,N=E.alive(S).length;
+    const v=Math.min(Math.floor(S.pot/M),Math.floor(chips/L));return Math.max(0,Math.floor(v/10)*10)},
+  validate(S,act){const p=S.players[S.cur],h=S.hand;if(!h||h.action||S.over)return false;
+    if(act.type==='skip')return true;if(act.type!=='bet')return false;
+    if(h.type==='adjacent')return false;
+    if(!Number.isInteger(act.amount)||act.amount<10||act.amount%10)return false;
+    if(act.amount>E.maxBet(S,h.type,p.chips))return false;
+    if(h.type==='pair'&&act.guess!=='big'&&act.guess!=='small')return false;return true},
+  /* 人類與 NPC 共用：下注/跳過 → 抽第三張、結算 */
+  act(S,act){if(!E.validate(S,act))return null;const h=S.hand,p=S.players[S.cur];h.action=act;
+    if(act.type==='skip'){h.outcome='skip';return h}
+    h.third=S.deck.pop();const t=h.third.r,b=act.amount;let net;
+    if(h.type==='normal'){if(t===h.lo||t===h.hi){net=-2*b;h.outcome='hit'}else if(t>h.lo&&t<h.hi){net=b;h.outcome='win'}else{net=-b;h.outcome='lose'}}
+    else{if(t===h.lo){net=-3*b;h.outcome='triple'}else if((act.guess==='big')===(t>h.lo)){net=b;h.outcome='win'}else{net=-b;h.outcome='lose'}}
+    p.chips+=net;S.pot-=net;h.net=net;return h},
+  /* 補池：先淘汰付不起者(剩餘籌碼歸底池，維持資金守恆)，再每人各繳 10，重複至底池>0 */
+  eliminate(S){const ev=[];for(const p of E.alive(S))if(p.chips<=0){p.alive=false;p.chips=0;ev.push(`${p.name} 籌碼歸零，淘汰`)}return ev},
+  refill(S){const ev=[];let g=0;while(S.pot<=0&&g++<1000){
+      for(const p of E.alive(S))if(p.chips<10){p.alive=false;S.pot+=p.chips;ev.push(`${p.name} 籌碼不足被淘汰（剩餘 ${p.chips} 歸底池）`);p.chips=0}
+      if(S.pot>0)break;const al=E.alive(S);if(al.length<=1)break;
+      al.forEach(p=>p.chips-=10);S.pot+=10*al.length;ev.push(`所有有效玩家各繳 10 補池 → 底池 ${S.pot}`);ev.push(...E.eliminate(S))}
+    return ev},
+  checkEnd(S){const al=E.alive(S);if(al.length<=1||!al.some(p=>p.human)){S.over=true;S.winner=(al.length?al:S.players).slice().sort((x,y)=>y.chips-x.chips)[0]}return S.over},
+  next(S){let i=S.cur;do{i=(i+1)%S.players.length}while(!S.players[i].alive);S.cur=i},
+  sum:S=>S.players.reduce((a,p)=>a+p.chips,0)+S.pot
+};
+/* ============ NPC Controller：同一套隨機邏輯 ============ */
+const NPC={decide(S){const h=S.hand,p=S.players[S.cur],mx=E.maxBet(S,h.type,p.chips),R=Math.random,cl=(x,a,b)=>Math.max(a,Math.min(b,x));
+  if(h.type==='adjacent'||mx<10)return{type:'skip'};
+  /* 只看已翻開的門柱，用機率估算勝率；牌好就重注、牌差通常跳過但偶爾賭一把，金額帶隨機情緒 */
+  let pw,guess,pr;
+  if(h.type==='pair'){const big=(13-h.lo)*4/50,sm=(h.lo-1)*4/50;guess=big>=sm?'big':'small';pw=Math.max(big,sm)-0.04;pr=cl((pw-0.3)/0.4,0.4,0.97)}
+  else{pw=(h.hi-h.lo-1)*4/50;pr=cl((pw-0.3)/0.45,0.06,0.97)}
+  if(R()>=pr)return{type:'skip'};
+  const conf=cl((pw-0.3)/0.6,0,1),frac=0.1+0.9*conf*conf*(0.6+0.4*R());
+  const cap=Math.max(10,Math.floor(p.chips*(0.15+0.5*conf)/10)*10);
+  let amount=Math.floor(Math.min(mx*frac,cap)/10)*10;amount=Math.max(10,Math.min(mx,amount));
+  return h.type==='pair'?{type:'bet',amount,guess}:{type:'bet',amount}}};
+
+/* ============ UI / Network Controller（房主執行規則，其他人只收畫面快照、送操作指令） ============ */
+const $=s=>document.querySelector(s),sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const RK=r=>({1:'A',11:'J',12:'Q',13:'K'}[r]||r),SU=['♠','♥','♦','♣'],PFX='shedragon-';
+let S=null,gen=0,me=0,mode='single',peer=null,roster=[],lobby=null,started=false,hostConn=null;
+let ui={shown:0,flip:-1,msg:''},wait=null,resolver=null,tid=0,waitMx=0,V=null,lastTid=-1,acted=-1,bet=10,guess=null,mx=0;
+const show=id=>{['home','lobby','game'].forEach(x=>$('#'+x).classList.toggle('hide',x!==id));['#rs','#er'].forEach(i=>$(i).classList.toggle('hide',mode==='client'))};
+const panel=on=>$('#panel').classList.toggle('hide',!on);
+function cardEl(c,up,fl){if(!c)return'<div class="card empty">—</div>';
+  return up?`<div class="card${c.s==1||c.s==2?' red':''}${fl?' flip':''}">${RK(c.r)}<small>${SU[c.s]}</small></div>`:`<div class="card back${fl?' flip':''}">?</div>`}
+function render(v){V=v;const h=v.hand;
+  $('#players').innerHTML=v.players.map((p,i)=>`<div class="pl${i===v.cur&&!v.over?' cur':''}${p.alive?'':' out'}${i===me?' me':''}"><b>${p.name}${i===me?'(你)':''}${i===v.cur&&!v.over?' ▶':''}</b>${p.chips} 元${p.alive?'':' (淘汰)'}</div>`).join('');
+  $('#potv').textContent=v.pot;
+  if(h){const l=h.a.r<=h.b.r,L=l?h.a:h.b,R=l?h.b:h.a;
+    $('#cards').innerHTML=cardEl(L,v.shown>=1,v.flip===0)+(h.type==='adjacent'?cardEl(null):cardEl(h.third||{r:0,s:0},v.shown>=3,v.flip===2))+cardEl(R,v.shown>=2,v.flip===1)}else $('#cards').innerHTML='';
+  $('#msg').innerHTML=v.msg;
+  const mine=v.wait===me&&v.tid!==acted&&!v.over;
+  if(mine&&v.tid!==lastTid){lastTid=v.tid;mx=v.mx;guess=null;bet=10;
+    $('#gr').classList.toggle('hide',h.type!=='pair');$('#mx').textContent=mx||'無（只能跳過）';
+    const sl=$('#sl');sl.max=Math.max(mx,10);sl.disabled=mx<10;document.querySelectorAll('.d,#qhalf,#qmax').forEach(b=>b.disabled=mx<10)}
+  panel(mine);if(mine)upd();
+  if(v.over)endScreen(v);else $('#end').classList.add('hide')}
+function upd(){bet=Math.max(10,Math.min(bet,mx));$('#betv').textContent=bet;$('#sl').value=bet;
+  $('#ok').disabled=mx<10||(V.hand.type==='pair'&&!guess);document.querySelectorAll('.g').forEach(b=>b.classList.toggle('sel',b.dataset.g===guess))}
+function endScreen(v){const w=v.players[v.winner],out=!v.players[me].alive;$('#end').classList.remove('hide');
+  $('#et').textContent=out?'💀 你被淘汰了':'🎉 你獲勝了！';$('#eb').textContent=out?`獲勝者：${w.name}（${w.chips} 元）`:`最終籌碼：${w.chips} 元`}
+/* --- 房主端：狀態快照與廣播 --- */
+const mkView=()=>{const h=S.hand;return{players:S.players.map(p=>({name:p.name,chips:p.chips,alive:p.alive})),pot:S.pot,cur:S.cur,over:S.over,winner:S.winner?S.winner.id:null,
+  hand:h&&{a:h.a,b:h.b,type:h.type,third:ui.shown>=3?h.third:null},shown:ui.shown,flip:ui.flip,msg:ui.msg,wait,mx:waitMx,tid}};
+function push(m){if(m!==undefined)ui.msg=m;const v=mkView();ui.flip=-1;render(v);roster.forEach(r=>{try{r.conn&&r.conn.open&&r.conn.send({t:'view',v})}catch(e){console.warn('send fail',e)}})}
+/* 真人(本機或遠端)與 NPC 共用 E.act；遠端指令經 onAct 驗證 */
+function onAct(seat,a){if(wait===seat&&resolver&&E.validate(S,a)){const r=resolver;resolver=null;wait=null;r(a)}}
+const humanTurn=seat=>new Promise(res=>{const h=S.hand,p=S.players[seat];waitMx=E.maxBet(S,h.type,p.chips);tid++;wait=seat;resolver=res;
+  push(`輪到 ${p.name}：${h.type==='pair'?'對子！猜大／猜小並下注，或跳過':'下注或跳過'}`)});
+function submit(a){if(!V||V.wait!==me||acted===V.tid)return;acted=V.tid;panel(false);if(mode==='client')hostConn.send({t:'act',act:a});else onAct(me,a)}
+async function turnLoop(){const my=gen;while(my===gen&&!S.over){try{if(await playHand(my))return}catch(e){console.error(e);wait=null;resolver=null;await sleep(800);if(my!==gen)return;try{E.next(S)}catch(_){}}}}
+const safeNpc=()=>{try{return NPC.decide(S)}catch(e){return{type:'skip'}}};
+async function playHand(my){const ok=()=>my===gen;const p=S.players[S.cur],h=E.startHand(S),hum=p.human;
+    ui.shown=0;push(`${p.name} 的回合${h.reshuffled?'（牌堆不足，已重新洗牌）':''}`);await sleep(hum?400:900);if(!ok())return true;
+    ui.shown=1;ui.flip=0;push();await sleep(600);if(!ok())return true;
+    ui.shown=2;ui.flip=1;push();await sleep(hum?400:1000);if(!ok())return true;
+    let act;
+    if(h.type==='adjacent'){push(`門柱 ${RK(h.a.r)}、${RK(h.b.r)} 相鄰，無法射中，自動跳過`);act={type:'skip'};await sleep(1400)}
+    else if(hum)act=await humanTurn(S.cur);
+    else{act=safeNpc();push(act.type==='skip'?`${p.name} ${h.type==='pair'?'（對子）':''}選擇跳過`:`${p.name} ${h.type==='pair'?'（對子）':''}下注 ${act.amount} 元${act.guess?(act.guess==='big'?'，猜大':'，猜小'):''}`);await sleep(1100)}
+    if(!ok())return true;
+    if(!E.act(S,act)){act={type:'skip'};E.act(S,act)}
+    if(act.type==='bet'){ui.shown=3;ui.flip=2;push();await sleep(700);if(!ok())return true;
+      const nm={win:'射中！',lose:'射不中',hit:'撞柱！（2 倍）',triple:'三條！（3 倍）'}[h.outcome];
+      push(`${p.name}：第三張 ${RK(h.third.r)}${SU[h.third.s]} → <span class="${h.net>0?'win':'lose'}">${nm} ${h.net>0?'+':''}${h.net} 元</span><br>${p.name} 籌碼 ${p.chips}　底池 ${S.pot}`)}
+    else if(h.type!=='adjacent')push(`${p.name} 跳過，籌碼與底池不變`);
+    await sleep(1300);if(!ok())return true;
+    const ev=[...E.eliminate(S),...E.refill(S)];
+    if(ev.length){push(ev.join('<br>'));await sleep(1500);if(!ok())return true}
+    if(E.checkEnd(S)){push();return true}
+    E.next(S);push();return false}
+function begin(){gen++;wait=null;resolver=null;acted=-1;lastTid=-1;tid=0;me=0;ui={shown:0,flip:-1,msg:''};
+  S=E.newGame(roster.map(r=>({name:r.name,human:!!(r.host||(r.conn&&r.conn.open))})));
+  roster.forEach((r,i)=>{try{r.conn&&r.conn.open&&r.conn.send({t:'seat',seat:i})}catch(e){}});
+  $('#end').classList.add('hide');panel(false);show('game');turnLoop()}
+const npcs=(k,from)=>Array.from({length:k},(_,i)=>({name:'NPC'+(i+1)}));
+const clean=s=>String(s||'').replace(/[<>&"'`]/g,'').trim().slice(0,8);
+const myName=()=>{const n=clean($('#pname').value);try{localStorage.setItem('sdm_name',n)}catch(e){}return n};
+const fixNames=a=>{const seen=new Set;return a.map(n=>{if(/^NPC\d+$/i.test(n))n='玩家'+n;const b=n;let k=2;while(seen.has(n))n=b+k++;seen.add(n);return n})};
+const lobbyNames=()=>fixNames([lobby.hostName,...lobby.conns.map((c,i)=>c.pname||`玩家${i+2}`)]);
+function startSingle(){mode='single';started=true;roster=[{name:fixNames([myName()||'玩家'])[0],host:true},...npcs(+$('#n').value-1)];begin()}
+/* --- 連線：房主建立房間，缺的人數補 NPC1、NPC2… --- */
+function onErr(e){alert(e.type==='peer-unavailable'?'找不到房間，請確認代碼':'連線失敗：'+e.type+'\n（在 claude.ai 預覽頁無法連線，請部署到 GitHub Pages 後使用）');home()}
+const genCode=()=>Array.from({length:4},()=>'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random()*32)]).join('');
+function createRoom(){if(typeof Peer==='undefined')return alert('PeerJS 載入失敗，請檢查網路');mode='host';started=false;const code=genCode();peer=new Peer(PFX+code);
+  peer.on('error',e=>{if(e.type==='unavailable-id'){peer.destroy();createRoom()}else onErr(e)});
+  peer.on('open',()=>{lobby={total:+$('#rn').value,code,conns:[],hostName:myName()||'玩家1'};lobbyUpdate()});
+  peer.on('connection',c=>c.on('open',()=>{
+    if(started||lobby.conns.length+1>=lobby.total){c.send({t:'full'});setTimeout(()=>c.close(),500);return}
+    lobby.conns.push(c);c.on('data',m=>{if(m.t==='act')onAct(roster.findIndex(r=>r.conn===c),m.act);else if(m.t==='hello'){c.pname=clean(m.name);if(!started)lobbyUpdate()}});c.on('close',()=>onClose(c));lobbyUpdate()}))}
+function lobbyUpdate(){const m={t:'lobby',names:lobbyNames().map((n,i)=>i?n:n+'（房主）'),total:lobby.total,code:lobby.code};renderLobby(m);lobby.conns.forEach(c=>c.send(m))}
+function renderLobby(m){show('lobby');$('#lcode').textContent=m.code;$('#lplayers').innerHTML=m.names.join('<br>');$('#lstart').classList.toggle('hide',mode!=='host');$('#lstart').disabled=m.names.length<2}
+function startOnline(){started=true;const nm=lobbyNames();roster=[{name:nm[0],host:true},...lobby.conns.map((c,i)=>({name:nm[i+1],conn:c})),...npcs(lobby.total-1-lobby.conns.length)];begin()}
+function onClose(c){if(!started){lobby.conns=lobby.conns.filter(x=>x!==c);lobbyUpdate();return}
+  const i=roster.findIndex(r=>r.conn===c);if(i<0||!S)return;const p=S.players[i];p.human=false;p.name+='（離線）';
+  if(wait===i&&resolver){const r=resolver;resolver=null;wait=null;r(NPC.decide(S))}}
+function join(){const code=$('#code').value.trim().toUpperCase();if(!code)return;if(typeof Peer==='undefined')return alert('PeerJS 載入失敗，請檢查網路');
+  mode='client';peer=new Peer();peer.on('error',onErr);
+  peer.on('open',()=>{const hc=hostConn=peer.connect(PFX+code,{reliable:true});hc.on('open',()=>hc.send({t:'hello',name:myName()}));
+    hc.on('data',m=>{if(m.t==='lobby')renderLobby(m);else if(m.t==='seat'){me=m.seat;acted=-1;lastTid=-1}else if(m.t==='view'){show('game');render(m.v)}else if(m.t==='full'){alert('房間已滿或遊戲已開始');home()}});
+    hc.on('close',()=>{if(hostConn===hc){alert('與房主斷線');home()}})})}
+function home(){gen++;wait=null;resolver=null;hostConn=null;started=false;lobby=null;S=null;roster=[];try{peer&&peer.destroy()}catch(e){}peer=null;mode='single';$('#end').classList.add('hide');panel(false);show('home')}
+try{$('#pname').value=localStorage.getItem('sdm_name')||''}catch(e){}
+$('#rn').innerHTML=[2,3,4,5,6,7,8].map(n=>`<option${n==4?' selected':''}>${n}</option>`).join('');
+$('#start').onclick=startSingle;$('#create').onclick=createRoom;$('#join').onclick=join;$('#lstart').onclick=startOnline;$('#lleave').onclick=home;
+$('#rs').onclick=begin;$('#er').onclick=begin;$('#hm').onclick=home;$('#eh').onclick=home;
+document.querySelectorAll('.d').forEach(b=>b.onclick=()=>{bet+=+b.dataset.d;upd()});
+$('#qhalf').onclick=()=>{bet=Math.max(10,Math.floor(mx/20)*10);upd()};$('#qmax').onclick=()=>{bet=mx;upd()};
+$('#sl').oninput=e=>{bet=+e.target.value;upd()};
+document.querySelectorAll('.g').forEach(b=>b.onclick=()=>{guess=b.dataset.g;upd()});
+$('#ok').onclick=()=>submit({type:'bet',amount:bet,guess:V.hand.type==='pair'?guess:undefined});
+$('#skip').onclick=()=>submit({type:'skip'});
+</script></body></html>
